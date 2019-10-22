@@ -201,6 +201,7 @@ int main(int argc, char *argv[])
 				//这里设置为high 让主进程在先
                 MPI_Intercomm_merge(tmpInterComm0, true, &allComm1);
 					
+
 				MPI_Barrier(allComm1);
 
                 MPI_Comm_rank(allComm1, &parentRankInAllComm);

@@ -17,10 +17,10 @@ int main(int argc, char *argv[])
 {
     MPI_Init(&argc, &argv);
 
-    for(int i = 0; i < argc; i++)
-    {
-        printf("%s\n", argv[i]);
-    }
+    //for(int i = 0; i < argc; i++)
+    //{
+    //    printf("%s\n", argv[i]);
+    //}
     
     MPI_Group worldGrp=MPI_GROUP_NULL;
 	//用于在循环内部迭代使用的tmpGrp
@@ -42,8 +42,8 @@ int main(int argc, char *argv[])
 
     MPI_Comm_size(MPI_COMM_WORLD, &parentProcNum);
     MPI_Comm_rank(MPI_COMM_WORLD, &parentRankInWorld);
-	cout << "parentProcNum: " << parentProcNum <<endl;
-	MPI_Barrier(MPI_COMM_WORLD);
+	//cout << "parentProcNum: " << parentProcNum <<endl;
+	//MPI_Barrier(MPI_COMM_WORLD);
 
 /*
     MPI_Comm allComm[parentProcNum+1];
@@ -89,7 +89,12 @@ int main(int argc, char *argv[])
             argv_array[1] = NULL;
 			cout << "In loop " << i <<": before MPI_Barrier(allComm0) and Comm_spawn" << endl;	
 			//第二次进入循环做Barrier的时候，allComm当中包括了新生成的子程序。
-			MPI_Barrier(allComm0);	
+			//MPI_Barrier(allComm0);	
+
+            MPI_Comm_rank(allComm0, &parentRankInAllComm);
+            MPI_Comm_size(allComm0, &sizeAllComm);
+            cout << "[before spawn allComm0: parent " << parentRankInAllComm <<"] is going to spawn new process" <<endl;
+            cout << "[before spawn allComm0: parent " << parentRankInAllComm <<"] size of allCommo:" <<sizeAllComm <<endl;
 
 			//下面的if-else区域都会产生新的tmpComm
             if(i == 0)
@@ -109,10 +114,10 @@ int main(int argc, char *argv[])
 
             MPI_Comm_rank(allComm0, &parentRankInAllComm);
             MPI_Comm_size(allComm0, &sizeAllComm);
-            cout << "[before merge allComm0: parent " << parentRankInAllComm <<"] is going to spawn new process" <<endl;
+            cout << "[before merge allComm0: parent " << parentRankInAllComm <<"] is going to merge new process" <<endl;
             cout << "[before merge allComm0: parent " << parentRankInAllComm <<"] size of allCommo:" <<sizeAllComm <<endl;
 
-			MPI_Barrier(allComm0);	
+			//MPI_Barrier(allComm0);	
 			//MPI_Comm allComm2;
             //让parent所属的通信域优先级更高
 			//这里要生成一个新的interComm
@@ -120,7 +125,7 @@ int main(int argc, char *argv[])
             MPI_Intercomm_merge(tmpInterComm0, false, &allComm1);
             
 			//在父进程中，merge之后包括了子进程。则每个子进程在getParent之后就需要马上Barrier一次。 
-			MPI_Barrier(allComm1);
+			//MPI_Barrier(allComm1);
 
             MPI_Comm_rank(allComm1, &parentRankInAllComm);
             MPI_Comm_size(allComm1, &sizeAllComm);
@@ -135,10 +140,10 @@ int main(int argc, char *argv[])
     else
     {
         //打印所有的参数，确认从MPI_Comm_spawn传递过来的参数从第几个开始
-        for(int i =0 ; i<argc;i++)
-        {
-            printf("spawned argument: %s\n",argv[i]);
-        }
+        //for(int i =0 ; i<argc;i++)
+        //{
+        //    printf("spawned argument: %s\n",argv[i]);
+        //}
         
         parentProcNum = atoi(argv[1]);
 
@@ -146,10 +151,15 @@ int main(int argc, char *argv[])
         int spawningTime ;
 
         //tmpInterComm[0]是当前进程获得的
-        MPI_Intercomm_merge(tmpInterComm0,false, &allComm0);
+		//只有这里merge的时候设置为true，因为新进程所属的group现在只有自己
+        MPI_Intercomm_merge(tmpInterComm0,true, &allComm0);
+		
+		MPI_Comm_group(allComm0, &tmpGrp);
+		MPI_Comm_create(allComm0, tmpGrp, &allComm1);
 
 		//子进程在merge之后需要立即Barrier一次，才能进入后续的spawn
-		MPI_Barrier(allComm0);
+		//父进程中使用的是allComm1，所以这里的第一次同步也使用allComm1
+		//MPI_Barrier(allComm1);
 
         int rankInAllComm0;
         //这里设定父进程数量为3
@@ -188,23 +198,27 @@ int main(int argc, char *argv[])
 				MPI_Comm_group(allComm1, &tmpGrp);
 				MPI_Comm_create(allComm1, tmpGrp, &allComm0);
 
+                MPI_Comm_rank(allComm0, &parentRankInAllComm);
+                MPI_Comm_size(allComm0, &sizeAllComm);
+                cout << "[child " << parentRankInAllComm <<"] is going to spawn new process before barrier" <<endl;
+                cout << "[child " << parentRankInAllComm <<"] size of allComm before barrier:" <<sizeAllComm <<endl;
 
 				//子进程的MPI_Barrier应当放在下一次spawn之前
-				MPI_Barrier(allComm0);
+				//MPI_Barrier(allComm0);
 
                 //注意这里调用的spawn，root进程的rank一定要与parent当中的保持一致。
                 //MPI_Comm_spawn(childProgram, MPI_ARGV_NULL, 1, MPI_INFO_NULL, parentProcNum-spawningTime+i, allComm[i], &tmpInterComm[i+1], MPI_ERRCODES_IGNORE);
                 MPI_Comm_spawn(childProgram, argv_array, 1, MPI_INFO_NULL, parentProcNum-spawningTime+i, allComm0, &tmpInterComm0, MPI_ERRCODES_IGNORE);
 				cout << "parentProcNum-spawningTime+i:"<< parentProcNum-spawningTime+i << endl;	
 
-				MPI_Barrier(allComm0);
+				//MPI_Barrier(allComm0);
 
 				//这里可能需要把allComm0改为allComm1，tmpInterComm来自于allComm0，如果输出覆盖allComm0，不知道会不会有问题
-				//这里设置为high 让主进程在先
-                MPI_Intercomm_merge(tmpInterComm0, true, &allComm1);
+				//这里设置为false 由于在merge的时候当前进程所属的group是所有父进程和子进程一起的大group，这个group放在前面，所以设置为false
+                MPI_Intercomm_merge(tmpInterComm0, false, &allComm1);
 					
 
-				MPI_Barrier(allComm1);
+				//MPI_Barrier(allComm1);
 
                 MPI_Comm_rank(allComm1, &parentRankInAllComm);
                 MPI_Comm_size(allComm1, &sizeAllComm);

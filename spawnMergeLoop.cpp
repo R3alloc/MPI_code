@@ -87,8 +87,10 @@ int main(int argc, char *argv[])
             char** argv_array = new char*[2];
             argv_array[0] = parentProcStr;
             argv_array[1] = NULL;
-			
+			cout << "In loop " << i <<": before MPI_Barrier(allComm0) and Comm_spawn" << endl;	
+			//第二次进入循环做Barrier的时候，allComm当中包括了新生成的子程序。
 			MPI_Barrier(allComm0);	
+
 			//下面的if-else区域都会产生新的tmpComm
             if(i == 0)
             {
